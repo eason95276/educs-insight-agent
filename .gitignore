@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.docx
+docx_render/
+scripts/generate_resume_docx.py
+data/*.db
+data/test_agent.db
+data/cache/
+data/chroma/
+.streamlit/secrets.toml
