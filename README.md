@@ -177,22 +177,25 @@ sql/group_workload.sql
 - 检索后结合关键词 overlap 做轻量 rerank，提高业务口径命中率
 - 如果 Chroma 环境异常，会降级为关键词 fallback，保证项目可运行
 
-## 面试表达
+## 设计说明
 
-一句话：
+项目采用“确定性计算 + LLM 生成”的混合架构。结构化指标由 Pandas/SQL 在本地完成，非结构化业务规则由 RAG 检索补充，LLM 只负责将聚合后的结果组织成可读报告。
 
-```text
-我做了一个面向 AI 教育产品客户成功场景的数据分析 Agent，将使用率分析、培训达标率诊断、自然语言问数、RAG 业务口径检索、月报生成和成绩单模板清洗封装成可追踪工作流。
-```
-
-核心设计：
+### 核心原则
 
 ```text
-LLM 不直接处理原始表格。结构化数据由 Pandas/SQL 计算，非结构化业务规则由 RAG 检索，LangGraph 负责任务编排，DeepSeek 负责生成可读报告。
+LLM 不直接处理原始表格。
+结构化数据由 Pandas/SQL 计算。
+非结构化业务规则由 RAG 检索。
+LangGraph 负责任务编排。
+DeepSeek 负责生成可读报告。
 ```
 
-简历 bullet：
+### 扩展方式
 
-```text
-基于 Python、Streamlit、Pandas、SQLite、LangGraph、RAG 与 DeepSeek API 构建 AI 教育客户成功数据分析 Agent，实现产品使用率分析、项目交付状态跟踪、培训达标率诊断、自然语言问数、月报生成与成绩单模板清洗；设计隐私脱敏、token 摘要压缩和 LLM 缓存机制，避免原始教育数据直接进入模型上下文。
-```
+项目中的工具边界比较清晰：
+
+- 新增结构化问数任务：添加 SQL 文件并在 `src/query_agent.py` 中配置意图路由
+- 新增业务规则：向 `data/knowledge/` 添加 Markdown 文档
+- 新增指标：在 `src/metrics.py` 中扩展 Pandas 计算逻辑
+- 新增工作流节点：在 `src/workflow.py` 中扩展 LangGraph 节点
