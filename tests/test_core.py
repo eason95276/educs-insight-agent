@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.data_loader import load_dataset
-from src.exam_cleaner import clean_exam_scores
+from src.exam_cleaner import clean_exam_scores, clean_grade_report
 from src.metrics import build_analysis_tables, diagnose_rate_drop
 from src.privacy import mask_dataframe
 from src.query_agent import classify_intent, run_query_agent
@@ -83,6 +83,26 @@ def test_exam_cleaner_outputs_standard_template():
 
     assert list(cleaned.columns) == ["学校名称", "年级", "班级", "学生姓名", "学号", "考试名称", "科目", "成绩", "满分", "考试时间"]
     assert not issues.empty
+
+
+def test_exam_cleaner_outputs_grade_report():
+    raw = pd.DataFrame(
+        {
+            "学生": ["张三", "李四", "王五"],
+            "班级": ["三年级1班", "301", "三年级2班"],
+            "学生编号": ["2026001", "2026002", "2026003"],
+            "语文成绩": [90, 80, 85],
+            "数学": [95, 88, 92],
+            "英语成绩": [91, 84, 93],
+            "备注": ["", "", ""],
+        }
+    )
+    report, issues = clean_grade_report(raw)
+
+    assert list(report.columns) == ["姓名", "学号", "总分", "联排", "校排", "班排", "语文", "数学", "英语", "班级"]
+    assert report["总分"].max() == 276
+    assert set(report["班级"]) == {"三年级1班", "三年级2班"}
+    assert issues.empty
 
 
 def test_privacy_masking_changes_sensitive_values():

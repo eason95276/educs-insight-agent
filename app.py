@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from src.data_loader import load_dataset
-from src.exam_cleaner import clean_exam_scores
+from src.exam_cleaner import clean_exam_scores, clean_grade_report
 from src.llm_client import generate_monthly_report
 from src.metrics import build_analysis_tables, build_monthly_summary, diagnose_rate_drop
 from src.privacy import mask_dataframe, privacy_note
@@ -22,9 +22,37 @@ DB_PATH = DATA_DIR / "educs_insight.db"
 st.set_page_config(page_title="EduCS Insight Agent", layout="wide")
 
 
+FIELD_LABELS = {
+    "rank": "排名",
+    "product_name": "产品名称",
+    "teacher_usage_rate": "教师使用率",
+    "student_usage_rate": "学生使用率",
+    "combined_usage_rate": "综合使用率",
+    "project_count": "项目数",
+    "school_id": "学校编号",
+    "school_name": "学校名称",
+    "school_type": "学校类型",
+    "product_count": "覆盖产品数",
+    "group_name": "交付组",
+    "training_count": "培训项目数",
+    "qualified_count": "达标项目数",
+    "avg_effect_score": "平均效果分",
+    "qualification_rate": "培训达标率",
+    "staff_id": "人员编号",
+    "staff_name": "客户成功人员",
+    "status": "项目状态",
+    "project_id": "项目编号",
+    "month": "月份",
+}
+
+
 @st.cache_data
 def cached_data() -> dict[str, pd.DataFrame]:
     return load_dataset(DATA_DIR)
+
+
+def display_table(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(columns=FIELD_LABELS)
 
 
 def main() -> None:
@@ -61,14 +89,14 @@ def render_dashboard(data: dict[str, pd.DataFrame], months: list[str]) -> None:
     left, right = st.columns(2)
     with left:
         st.subheader("各产品使用率")
-        st.dataframe(tables["product_usage"].round(4), use_container_width=True)
+        st.dataframe(display_table(tables["product_usage"].round(4)), use_container_width=True, hide_index=True)
         st.subheader("学校使用排名")
-        st.dataframe(tables["school_ranking"].head(10).round(4), use_container_width=True)
+        st.dataframe(display_table(tables["school_ranking"].head(10).round(4)), use_container_width=True, hide_index=True)
     with right:
         st.subheader("交付组培训达标率")
-        st.dataframe(tables["group_training"].round(4), use_container_width=True)
+        st.dataframe(display_table(tables["group_training"].round(4)), use_container_width=True, hide_index=True)
         st.subheader("客户成功人员培训达标率")
-        st.dataframe(tables["staff_training"].round(4), use_container_width=True)
+        st.dataframe(display_table(tables["staff_training"].round(4)), use_container_width=True, hide_index=True)
 
     st.info(privacy_note())
 
@@ -113,7 +141,7 @@ def render_agent(data: dict[str, pd.DataFrame], months: list[str]) -> None:
         if result_tables:
             for name, table in result_tables.items():
                 st.write(f"**{name}**")
-                st.dataframe(table, use_container_width=True)
+                st.dataframe(display_table(table), use_container_width=True, hide_index=True)
         else:
             st.json(llm_context)
 
@@ -140,11 +168,11 @@ def render_agent(data: dict[str, pd.DataFrame], months: list[str]) -> None:
         st.json(result)
 
     st.subheader("隐私脱敏示例")
-    st.dataframe(mask_dataframe(data["schools"].head(5)), use_container_width=True)
+    st.dataframe(display_table(mask_dataframe(data["schools"].head(5))), use_container_width=True, hide_index=True)
 
 
 def render_exam_cleaner() -> None:
-    st.write("上传学校原始成绩单，清洗为海班慧标准导入模板。")
+    st.write("上传学校原始成绩单，清洗为年级成绩汇总表，并可同步导出后台导入长表。")
     uploaded = st.file_uploader("上传 CSV 成绩单", type=["csv"])
     raw = pd.read_csv(uploaded) if uploaded else pd.read_csv(DATA_DIR / "exam_raw_sample.csv")
 
@@ -158,17 +186,32 @@ def render_exam_cleaner() -> None:
     st.dataframe(raw, use_container_width=True)
 
     if st.button("清洗为标准模板"):
-        cleaned, issues = clean_exam_scores(raw, school_name, grade, exam_name, exam_date)
-        st.subheader("标准导入模板")
-        st.dataframe(cleaned, use_container_width=True)
+        grade_report, grade_issues = clean_grade_report(raw)
+        import_template, import_issues = clean_exam_scores(raw, school_name, grade, exam_name, exam_date)
+        issues = pd.concat([grade_issues, import_issues], ignore_index=True)
+
+        st.subheader("年级成绩汇总模板")
+        st.dataframe(grade_report, use_container_width=True, hide_index=True)
+        grade_csv_bytes = grade_report.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
-            "下载标准 CSV",
-            cleaned.to_csv(index=False, encoding="utf-8-sig"),
-            file_name="haibanhui_exam_template.csv",
+            "下载年级成绩汇总 CSV",
+            grade_csv_bytes,
+            file_name="grade_score_report.csv",
             mime="text/csv",
         )
+
+        with st.expander("查看后台导入长表"):
+            st.dataframe(import_template, use_container_width=True, hide_index=True)
+            import_csv_bytes = import_template.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "下载后台导入长表 CSV",
+                import_csv_bytes,
+                file_name="haibanhui_import_template.csv",
+                mime="text/csv",
+            )
+
         st.subheader("异常报告")
-        st.dataframe(issues, use_container_width=True)
+        st.dataframe(issues, use_container_width=True, hide_index=True)
 
 
 if __name__ == "__main__":

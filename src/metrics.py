@@ -3,6 +3,12 @@ from __future__ import annotations
 import pandas as pd
 
 
+def add_rank(df: pd.DataFrame, sort_column: str) -> pd.DataFrame:
+    ranked = df.sort_values(sort_column, ascending=False).reset_index(drop=True).copy()
+    ranked.insert(0, "rank", range(1, len(ranked) + 1))
+    return ranked
+
+
 def build_analysis_tables(data: dict[str, pd.DataFrame], month: str) -> dict[str, pd.DataFrame]:
     schools = data["schools"]
     staff = data["staff"]
@@ -32,26 +38,26 @@ def build_analysis_tables(data: dict[str, pd.DataFrame], month: str) -> dict[str
 
     project_overview = projects["status"].value_counts().rename_axis("status").reset_index(name="project_count")
 
-    product_usage = (
+    product_usage = add_rank(
         usage_enriched.groupby("product_name", as_index=False)
         .agg(
             teacher_usage_rate=("teacher_usage_rate", "mean"),
             student_usage_rate=("student_usage_rate", "mean"),
             combined_usage_rate=("combined_usage_rate", "mean"),
             project_count=("project_id", "nunique"),
-        )
-        .sort_values("combined_usage_rate", ascending=False)
+        ),
+        "combined_usage_rate",
     )
 
-    school_ranking = (
+    school_ranking = add_rank(
         usage_enriched.groupby(["school_id", "school_name", "school_type"], as_index=False)
         .agg(
             combined_usage_rate=("combined_usage_rate", "mean"),
             teacher_usage_rate=("teacher_usage_rate", "mean"),
             student_usage_rate=("student_usage_rate", "mean"),
             product_count=("product_name", "nunique"),
-        )
-        .sort_values("combined_usage_rate", ascending=False)
+        ),
+        "combined_usage_rate",
     )
 
     staff_training = (
@@ -80,8 +86,8 @@ def build_analysis_tables(data: dict[str, pd.DataFrame], month: str) -> dict[str
         "project_overview": project_overview,
         "product_usage": product_usage,
         "school_ranking": school_ranking,
-        "staff_training": staff_training.sort_values("qualification_rate", ascending=False),
-        "group_training": group_training.sort_values("qualification_rate", ascending=False),
+        "staff_training": add_rank(staff_training, "qualification_rate"),
+        "group_training": add_rank(group_training, "qualification_rate"),
     }
 
 
